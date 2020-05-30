@@ -1,0 +1,250 @@
+;Kaputelefon(f4) kÇt m†gneses. KTS3-hoz RFID olvas¢s
+; KÇt m†gneses: Zsilip kapus mudul is indul 1 m†sodpercre nyit†skor
+; de nem lehet kÅlîn szab†lyozni
+
+;2014.07.11.	RFID nyit†skor tiltott zene jelzÇskor zenÇt is kikapcsol 
+;2008.10.31.	Villog a k†rtya ÇrvÇnyesitÇs programoz†sakor
+;2008.07.24.	Automata ajt¢nyit¢ haszn†lhat¢
+;2007.08.05.	A lak†s bekapcsol†sa kîzben a sorkap CLR 0-ban van.
+;2007.08.31.	Uj LAKKI rutin
+;2005.06.24. 	RFID jelzÇs fent hiba javit†s
+;2005.08.08. 	24LC64 kezelÇs javit†sa
+
+;KONSTANSOK
+
+SZKOD	EQU 500	;SZERELO KOD (SZKDB darab) 
+KODENG  EQU 506	;K¢dra nyit†s + nyit†skor zene engedÇlyezÇs
+AJTIDA	EQU 507	;KAPUMAGNES MEGHUZASI IDO
+ATLAK1	EQU 508	;µtir†nyitott lak†s1
+;	EQU 509	;µtir†nyitott lak†s1 uj cime
+ATLAK2	EQU 510 ;µtir†nyitott lak†s2
+;	EQU 511	;µtir†nyitott lak†s2 uj cime 
+;
+SZKDB	EQU 6	;SZERELOKOD DB
+;BIPIDA	EQU 15	;BILLENTYUZET BIP IDO (1 SEC)
+BEKIDA	EQU 25	;LAKAS BEKAPCSOLASA UTANI TRANZIENS IDO
+CSIDOA	EQU 60	;CSENGETES IDO (30 SEC)
+CSIDEA	EQU 2	;CSENGETES ELO IDO TRANZIENS ALATT NEM FIGYELI
+		;A KEZIBESZELO FELVETELET
+CSVILA	EQU 11	;CSENGETES VEGEN A VILLOGAS (DB)
+ERIDOA	EQU 2	;TRANZIENS KIVARASA EROSITO BEKAPCSOLASAKOR
+AUTIDA	EQU 9	;AUTOMATIKUS FELCSONGETESHEZ A VARAKOZASI IDO
+KEZDRB	EQU 200	;ISMETLES KEZIBESZELONEL
+KDB	EQU 14	;A KOD PUFFER HOSSZA
+Y	EQU 32	;SZORZO A DALLAM TABLABAN
+
+;BYTE VALTOZOK
+BIPIDO	EQU 30H	;
+KAR	EQU 31H	;AZ UTOLJARA NYOMOT BILLENTYU
+KAR1    EQU 32H ;1-es DIGIT
+KAR10	EQU 33H ;10-es DIGIT
+KAR100	EQU 34H	;100-as DIGIT
+LAKSZ	EQU 35H	;Lak†ssz†m bin†risan (0=NINCS BEKAPCSOLHAT¢)
+KARE	EQU 36H ;Az oszlop mÇrÇs t†rol†sa
+CSIDO	EQU 37H	;CSENGETESI IDO (0=LEJART)
+AUTIDO	EQU 38H	;AUTOMATIKUS FELCSONGETES IDO
+AJTIDO	EQU 39H	;KAPUMAGNES MEGHUZASI IDO
+SECIDO	EQU 3AH	;FEL MASODPERC IDO
+CSIDEL	EQU 3BH	;CSENGETES ELEJE, TRANZIENS MIATTI KIVARAS
+ERIDO	EQU 3CH	;EROSITO BEKAPCSOLASA TRANZIENS UTAN
+BEKIDO	EQU 3DH	;LAKAS BEKAPCSOLAS UTANI TRANZIENS KIVARASA
+KIJSZ	EQU 3EH	;KIVILAGITOTT DIGIT MUTATO FLAG
+AJTE	EQU 3FH ;1. ELOZO KULCS GOMB HELYZET
+AJTEDB  EQU 40H	;2. ENNYI DB EGYFORMA MAR VOLT
+AJTT	EQU 41H	;3. EZ AZ ELFOGADOTT ERTEKE
+KEZE	EQU 42H	;1. KEZIBESZELO HELYZET
+KEZEDB	EQU 43H	;2. ENNYI DB EGYFORMA
+KEZT	EQU 44H	;3. EZ AZ ELFOGADOTT ERTEKE
+LKOD1	EQU 45H	;A LAKASHOZ TARTOZO BYTOK AZ EEPROMBAN
+LKOD2	EQU 46H
+LKOD3	EQU 47H
+KODIDO	EQU 48H	;KODRA NYITASKOR A MAGNES IDEJE
+KAR1T	EQU 49H	;PROGRAMOZAS ALATT A KAR1-3 TAROLASA
+KAR10T	EQU 4AH
+KAR100T	EQU 4BH
+PRIDO   EQU 4CH	;PROGRAMOZAS ALLATTI SURU BIP IDO
+THH	EQU 4DH	;A DALLAM H BYTE-JA
+TLH	EQU 4EH	;    "- " L   "
+HANG	EQU 4FH	;A DALLAM EGY HANGJANAK HOSSZA
+DPOINT	EQU 50H	;A DALLAM POINTERE 
+HHOSSZ	EQU 51H	;A DALLAM UTEM SZORZOJA
+ZENEF	EQU 52H	;ZENE  0=TILTAS,1-4=ZENE FAJTA, 5=>VELETLEN 
+LDAL	EQU 53H	;A DALLAM KEZDO CIMENEK LO BYTE-JA
+HDAL	EQU 54H ;	""              HI  "
+HMAG	EQU 55H	;HANGMAGASSAG ELTOLAS (CSAK PAROS LEHET)
+KODZEN	EQU 56H	;1.K¢dra nyit†skor a zene hossza/ 2.BeszÇd idã
+ZENEV	EQU 57H ;VELETLEN SZAM ZENEHEZ
+BELIDO 	EQU 58H	;Belsì ajt¢nyit¢ kapcsol¢ ideje
+INTR	EQU 59H	;INT 512 usec sz†ml†l¢(Csengã hang)
+INTR2	EQU 5AH	;INT  2 msec sz†ml†l¢ (Kijelzã rutin)
+INTR3	EQU 5BH ;Erãsitã mikrofon Çs hangsz¢r¢ kapcsol¢ jel sz†ml†l¢
+PROBA	EQU 5CH	;
+BMUT	EQU 5DH	;Billenty˚zet mutat¢ (0111 1111=nem kell lekÇrdezni)
+BPUF	EQU 5EH	;Az infrasugarak mÇrÇsÇnek t†rol†sa
+HANGR	EQU 5FH ;CsengetÇsi hangerã
+ESTIDO	EQU 60H	;SîtÇtben a  vonal kijelzÇs ideje(30 sec)
+LEDIDO	EQU 61H	;Vil†git†s LED kÇsleltetÇsi idã
+ZENER	EQU 62H	;Elìzì zene fajta
+NORMAG	EQU 63H	;Norm†l m†gnes teljes erãvel h£z 0.25 sec-ig
+RF1	EQU 64H	;RFID lak†ssz†m ÇrvÇnyesitÇskor
+RF2	EQU 65H	;RFID lak†ssz†m keresÇskor
+RF3	EQU 66H	;Az elãzã k†rtya adatai(5 byte)
+RF4	EQU 6BH	;70 msec a lekÇrdezÇs
+PUF	EQU 6CH ;KOD PUFFER A BILLENTYUZES SOR TAROLASARA
+
+;BIT VALTOZOK
+ALAP	EQU 57H	;ALAPHELYZET FLAG 0=ALAP  1=BEKAPCSOLT LAKAS
+FELVET  EQU 56H	;KEZIBESZELO  0=NEM VOLT FELVEVE, 1=FEL VOLT
+HFLAG	EQU 55H	;0=NINCS HIBA, 1=KULCS GOMB BE VAN RAGADVA A
+		;KEZIBESZELON
+PFLAG   EQU 54H	;A LAKO PROGRAMOZZA A LAKASKODOT
+TRUN	EQU 53H ;1=TIMER0 JAR, 0=LEALLITHATO
+MIKRO   EQU 52H	;MIKRO SZUNET FLAG KET HANG KOZOTT
+RSZ	EQU 51H ;RENDES SZUNET FLAG
+REFF	EQU 50H	;REFREN FLAG 1=REFRENT JATSZA
+
+BINF0	EQU 4FH	;Dallam lej†tsz†skor szinkron flag
+K1F	EQU 4EH	;EGYSZERI FLAG,NE TOROLJON KODRANYITAS
+KODENF	EQU 4DH	;KODRA NYITAS FLAG (0=TILTOTT A KODRA NYITAS)
+KODZZF	EQU 4CH	;KODRA NYITASKOR ZENE ENGEDELYEZETT (0=TILTVA)
+PSFL	EQU 4BH	;PSORKI RUTIN FLAGJE
+BINF	EQU 4AH ;Billenty˚zet szinkron flag
+KODZZE	EQU 49H	;K¢dra nyit†s jelzÇse a lak†sban egyedileg engedve
+MBF	EQU 48H	;Norm†l m†gnest minden m†sodik ciklusn†l kikapcsolja
+EROF	EQU 47H	;Erãsitã kapcsol¢i flag
+KOZF	EQU 46H	;A kîzîs input lekÇrdezÇs flagja
+INVF	EQU 45H ;Inverz jumper flag
+BILF	EQU 44H	;1=Az IT mÇrje a sugarakat, 0=KÇsz a mÇrÇs
+VILF	EQU 43H ;Villogtat†s flag
+EEPF	EQU 42H	;A eeprom rutin ne legyen megszakitva
+EEPF2	EQU 41H	;KTL00 rutin ne szakithassa meg înmag†t 	
+TORF	EQU 40H	;TîrlÇs flag, az IT-ben kijelîlik
+FELVIT	EQU 3FH	;Az IT felvÇtel vizsg†l¢ flagje
+;Hardware le°r†s:
+;AT89C2051 (P1,P3,TIMER0,TIMER1, 128 BYTE RAM, 2KBYTE FLASH)
+;24LC64 (64 Kbit= 8 Kbyte soros EEPROM)
+;74HC595 SOROS PORT
+
+	;Sorosan irhat¢ portok (74HC595, U9,U5,U8)	
+PSOR1  	EQU 2FH	;U9 PSOR1 rutin kezeli	
+		;BIT cimek
+LEDN 	EQU 78H	;NÇvsor LED-ek	(U9)
+LEDB 	EQU 79H	;RFID olvas¢ vezÇrlã: 0=van  1=nincs olvas†s
+DALENG 	EQU 7AH	;BIP vagy a dallam kapcsol†sa az erãsitãre
+MAGNES 	EQU 7BH	;M†gnes m˚kîdtetÇs
+INFRA 	EQU 7CH	;Infra ledek kîzîs an¢dja
+KJEGY	EQU 7DH	;1-es digit an¢dja 
+KJTIZ 	EQU 7EH	;10-es digit an¢dja
+KJSZAZ 	EQU 7FH	;100-as digit an¢dja
+
+PSOR2	EQU 2EH	;U5
+		;BIT c°mek
+GOND1	EQU 70H	;+1 lak†s
+GOND2	EQU 71H	;+2 lak†s
+SKDA	EQU 72H	;Sorkapocs adat, csengetÇsi hangerã kîzepes
+SKCK	EQU 73H	;Sorkapocs clok, csengetÇsi hangerã halk
+O1	EQU 74H	;Vonal feszÅltsÇg lekapcsol†sa felcsengetÇskor
+O2	EQU 75H	;RelÇ m˚kîdtetÇs di¢d†sn†l
+DALT	EQU 76H	;BIP-kor tilt†s a fesz.sokszorz¢n†l
+ZUM	EQU 77H	;ZÅmmer m˚kîdtetÇs m†gnes kezelÇsnÇl
+
+PSOR3	EQU 2DH	;U8
+
+	;A port3 bitjei 68H-6EH-ig a lak†spanelek paralel CLK bitjei
+SKCLR	EQU 6FH	;A lak†spanelek kîzîs tîrlã bitje
+
+PSOR4	EQU 2CH;U20 PSOR2 rutin kezeli
+		;BIT cimek
+	;60H-67H-IG INFRA ad¢ LED, 7 szegmenses kijelzã, 
+	;kîzîs ÇrzÇkelã BIT-ek 
+L1	EQU 60H	;Belsã nyit¢ gomb
+L2 	EQU 61H	;Inverz ÇrzÇkelã
+L3	EQU 62H	;SîtÇtedÇs ÇrzÇkelã
+L7	EQU 67H	;DP hÇtszegmenses kijelzã
+
+PSOR5	EQU 2BH	;U19
+		;BIT cimek
+	;58H-5EH-ig INFRA vevã di¢d†k
+F8	EQU 5FH	;Szabad
+
+	;Processzor PORT-ok
+	;P1 port 
+KOZIN 	EQU 90H		;Kîzîs bemenet:Belsã nyit†s, sîtÇtedÇs, inverz
+UJDAL 	EQU 91H		;Szoftveres dallam kimenet
+BIP 	EQU 92H		;Ajt¢ elãtti csengã hang
+KT 	EQU 93H		;Csengã modul energia 
+;INPUT BITEK:
+ZARL 	EQU 94H		;LENT A BELSO KAPCSOLO A KAPUNYITASHOZ
+ZARF 	EQU 95H		;LAKASKESZULEK  KULCS GOMBJA
+FELV 	EQU 96H		;A KEZIBESZELO HELYZETE
+BIN 	EQU 97H		;A BILLENTYUZET INPUTJA
+
+;PORT3 BIT CIMEI
+DA 	EQU 0B0H	;Soros adat
+CK 	EQU 0B1H	;Soros clock
+OUT1 	EQU 0B2H	;PSOR1 paralel clock
+OUT2 	EQU 0B3H	;PSOR2 paralel clock
+EROM 	EQU 0B4H	;Erãsitã mikrofon kapcsol¢ vezÇrlÇs
+CK24 	EQU 0B5H	;LC24 EEPROM clock
+EROH 	EQU 0B7H	;Erãsitã hangsz¢r¢ kapcsol¢ vezÇrlÇs
+;
+;FOPROGRAM
+	ORG 0
+	AJMP KEZD
+
+INTT0	CLR UJDAL	;TIMER0 RUTIN
+	CLR TR0
+	CLR ET0
+	RETI
+	ORG 0BH		;TIMER0 VECTOR
+	CLR BINF0	;A billenty˚zet szinkron flag tîrlÇse
+	JNB TRUN,INTT0	;DAL LEALLITAS
+	JB RSZ,DAL1
+	JB MIKRO,MSZUN	;MIKRO SZUNETRE UGRIK
+	AJMP DALI
+	ORG 1BH
+;	AJMP IDOINT1
+
+DALI	CPL UJDAL
+	CLR TR0
+	MOV TL0,TLH	;HOSSZ BEALLITAS
+	MOV TH0,THH
+	SETB TR0
+	RETI
+DAL1	CLR TR0		;SZAMLALAST LEALLIT
+MSZUN	CLR MIKRO
+	MOV TL0,#155	;222;#230; 24MHz,8MHz,6MHz
+	MOV TH0,#255  
+	RETI
+
+KEZD	MOV SP,#0FH	;SP be†llit†s. Bank 0 Çs bank 1 haszn†lhat¢
+	CLR CK24	;EEPROM chip select tilt†sa
+	MOV C,MAGNES	;Billenty˚zet RESET-re a m†gnes ne mozduljon
+	MOV 07H,C
+	MOV C,LEDN
+	MOV 08H,C
+	CLR A		;Kezdã null†z†s
+	MOV R0,#7FH
+KEZD0   MOV @R0,A
+	DEC R0
+	CJNE R0,#22H,KEZD0
+
+KEZD01	JMP OFF		;BARNI's program start from here
+
+
+BEF1	SETB EROH
+	JNB EROH,OFF	;waits until the button releases
+	JMP BEF1
+OFF 	CLR BIP		;turn off LED
+	SETB EROH
+	JB EROH,BEF2
+	JMP OFF
+
+
+BEF2	SETB EROH	;waits until the button releases
+	JNB EROH,ON
+	JMP BEF2
+ON	SETB BIP
+	SETB EROH
+	JB EROH,BEF1
+	JMP ON
